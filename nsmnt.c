@@ -15,8 +15,8 @@
 /* nsmnt: run a program in a new namespace, mounting directories */
 void usage()
 {
-   fprintf(stderr,"usage: nsmnt [-f file:dir] [-m src=dest[=options]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]\n");
-   fprintf(stderr,"-f: use file for list of mounts (one per line), from dir\n");
+   fprintf(stderr,"usage: nsmnt [-f file] [-m src=dest[=options]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]\n");
+   fprintf(stderr,"-f: file of -m arguments, one per line\n");
    fprintf(stderr,"-m: mount src outside namespace to dest inside namespace\n");
    fprintf(stderr,"-t: set the time offset in the namespace\n");
    fprintf(stderr,"if + or - is specified, it is relative to current time\n");
@@ -164,6 +164,33 @@ void addmap(char ***a, char *mapstring)
    alist[mapnum + 1] = NULL;
 }
 
+/* TODO: expand relative path in file to full path from file location */
+void addmapsfromfile(char ***a, char *file)
+{
+   char *line;
+   size_t len;
+   int l = 1;
+   FILE *fs;
+
+          /* open file */
+   fs = fopen(file, "r");
+   if (fs == NULL)
+   {
+      fprintf(stderr,"Couldn't open file %s as map file, errno=$d\n", 
+                         file, errno);
+      exit(1);
+   }
+   while (l > 0 )
+   {
+      len = 0;
+      line = NULL;
+          /* read lines from file, getline does malloc for us */
+/*TODO: relative path is from where the config file is */
+      l = getline(&line, &len, fs);
+          /* add map for line */
+      addmap(a, line); /*saves line */
+   }
+}
 
 /* find options */
 unsigned long findoption(char *opt)
@@ -310,6 +337,11 @@ arguments *process_args(int argc, char **argv)
    {
       if (argv[argn][0] == '-')
       {
+         if (argv[argn][1] == 'f')
+         {
+            argn++;
+            addmapsfromfile(&(args->maps), argv[argn]);
+         }
          if (argv[argn][1] == 'm')
          {
             argn++;
