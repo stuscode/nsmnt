@@ -45,8 +45,6 @@ static char target_stack[TARGET_STACK_SIZE];
 int pfd[2];
 uid_t uid;  /* process uid.  Not doing setuid */
 gid_t gid;  /* process gid.  Not doing setgid */
-char *program;
-char **programargs; 
 
 typedef struct 
 {
@@ -104,7 +102,7 @@ typedef struct
    double toff;  /* use double to get known type */
    char *hostname;
    char *program;
-   char **progargs; 
+   char *progargs[]; 
 } arguments;
 
 /* --------------------- PROCESS ARGUMENTS -------------------- */
@@ -176,7 +174,7 @@ void addmapsfromfile(char ***a, char *file)
    fs = fopen(file, "r");
    if (fs == NULL)
    {
-      fprintf(stderr,"Couldn't open file %s as map file, errno=$d\n", 
+      fprintf(stderr,"Couldn't open file %s as map file, errno=%d\n", 
                          file, errno);
       exit(1);
    }
@@ -313,7 +311,7 @@ double time_offset(char *targ)
    return difftime(t1, now);
 }
 
-arguments *process_args(int argc, char **argv)
+arguments *process_args(int argc, char *argv[])
 {
    int argn = 1;
    int npargs;
@@ -331,8 +329,10 @@ arguments *process_args(int argc, char **argv)
    args->toff = 0.0;
    args->maps = malloc(sizeof(void *)); /*always a list*/
    *(args->maps) = NULL;
+#ifdef NOT
    args->progargs = malloc(sizeof(void *)); /*always a list*/
    *(args->progargs) = NULL;
+#endif /*NOT*/
    while (argn <  argc)
    {
       if (argv[argn][0] == '-')
@@ -362,6 +362,7 @@ arguments *process_args(int argc, char **argv)
       else /* process program and arguments */
       {
          args->program = argv[argn];
+#ifdef NOT
          addmap(&(args->progargs), argv[argn]); /* program is first arg */
          argn++;
 
@@ -370,7 +371,10 @@ arguments *process_args(int argc, char **argv)
             addmap(&(args->progargs), argv[argn]);
             argn++;
          }
+         addmap(&(args->progargs), NULL);
          break; /* this else handled all the rest of the arguments */
+#endif /*NOT*/
+         args->progargs=(argv[argn]);
       }
       argn++;
    }
@@ -400,7 +404,7 @@ void setnstime(double toff, char *clock)
    close(fd);
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
    pid_t child_pid;
    char map[512];
@@ -528,13 +532,13 @@ static int exectarget (void *args)
 {
    arguments *a = (arguments *)args;
 
-printf("exectarget\n");
+printf("exectarget %s\n", a->program);
    execvp(a->program, a->progargs);
    printf("Error execing primary executable\n");
    exit(1);
 }
 
-/* format: /source/path:/dest/path[:options]? */
+/* format: /source/path=/dest/path[:options]? */
 /* options are comma separated */
 int parseandmount(char *m)
 {
