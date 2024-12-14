@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@ void usage()
    fprintf(stderr,"-t: set the time offset in the namespace\n");
    fprintf(stderr,"if + or - is specified, it is relative to current time\n");
    fprintf(stderr,"-h: set the hostname in the namespace\n");
+   fprintf(stderr,"-d: print debug messages\n");
    exit(0);
 }
 
@@ -78,6 +80,21 @@ mountopts mount_options[] =
         {NULL, 0},
 };
 
+
+int GLOBAL_DEBUG = 0;
+void DBPRINT(char * format, ...)
+{
+    char buffer[4096];
+    va_list args;
+    if (GLOBAL_DEBUG)
+    {
+       va_start(args, format);
+       vsprintf(buffer, format, args);
+       printf("%s", buffer);
+       va_end(args);
+    }
+}
+
  /* find a equal character, make sure it isn't in a quoted string */
 char * find_equal_unquote(char *s)
 {
@@ -101,8 +118,8 @@ typedef struct
    char **maps; /*pointer to array of pointers to map strings */
    double toff;  /* use double to get known type */
    char *hostname;
+   char **progargs; 
    char *program;
-   char *progargs[]; 
 } arguments;
 
 /* --------------------- PROCESS ARGUMENTS -------------------- */
@@ -358,6 +375,10 @@ arguments *process_args(int argc, char *argv[])
             args->hostname = malloc(strlen(argv[argn])+1);
             strcpy(args->hostname, argv[argn]);
          }
+         else if (argv[argn][1] == 'd')
+         {
+            GLOBAL_DEBUG = 1;
+         }
       }
       else /* process program and arguments */
       {
@@ -374,7 +395,8 @@ arguments *process_args(int argc, char *argv[])
          addmap(&(args->progargs), NULL);
          break; /* this else handled all the rest of the arguments */
 #endif /*NOT*/
-         args->progargs=(argv[argn]);
+         args->progargs=&(argv[argn]);
+         argn = argc;
       }
       argn++;
    }
@@ -417,7 +439,8 @@ int main(int argc, char *argv[])
    uid = getuid();
    gid = getgid();
    args = process_args(argc, argv);
-   dump_arguments(args);
+   if (GLOBAL_DEBUG)
+      dump_arguments(args);
    cloneflags = CLONE_NEWNS | CLONE_NEWUSER | CLONE_NEWPID | SIGCHLD;
    if (args->hostname != NULL)
       cloneflags |=  CLONE_NEWUTS;
@@ -444,13 +467,13 @@ int main(int argc, char *argv[])
       perror("clone");
       exit(1);
    }
-printf("child_pid: %ld\n", (long) child_pid);
+   DBPRINT("child_pid: %ld\n", (long) child_pid);
    update_map("deny", child_pid, "setgroups");
    sprintf(map, "%ld %ld 1\n", (long) uid, (long) uid);
    update_map(map,    child_pid, "uid_map");
    sprintf(map, "%ld %ld 1\n", (long) gid, (long) gid);
    update_map(map,    child_pid, "gid_map");
-printf("go\n");
+   DBPRINT("go\n");
    pw_go(pfd);  /* release child in namespace */
    waitpid(child_pid, NULL, 0); /* wait for end */
    return 0;
@@ -482,6 +505,18 @@ void update_map(char *data, pid_t pid, char *map_file)
 /* it will set up the environment, then clone a new process */
 /* which will then exec the target.  It will then wait and handle */
 /* signals. */
+void handle_sigchild(int sig)
+{
+    DBPRINT("Caught signal %d\n", sig);
+}
+
+void handle_sigterm(int sig)
+{
+   /* TODO End process */
+    DBPRINT("Caught signal %d\n", sig);
+/*    exit(0);*/
+}
+
 
 int pidone(void *a) 
 {
@@ -491,9 +526,9 @@ int pidone(void *a)
    struct sigaction sas;
    pid_t pid, primary_pid;
 
-printf("wait\n");
+   DBPRINT("wait\n");
    pw_wait(pfd); /*wait for parent to set uid and gid maps */
-printf("done wait\n");
+   DBPRINT("done wait\n");
    res = mount("none", "/proc", "proc", 0, ""); /* mount /proc for new pid namespace*/
    if (res < 0)
    {
@@ -515,15 +550,21 @@ printf("done wait\n");
 
    primary_pid = clone(exectarget, target_stack + TARGET_STACK_SIZE, SIGCHLD, (void *) args); 
 
+   signal(SIGTERM, handle_sigterm); 
+   signal(SIGCHLD, handle_sigchild); 
+
    while ((pid = wait(NULL)) > 0)
    {
       if (pid == primary_pid)
       {
+         /* TODO: MAKE THIS EXIT THE PROCESS */
          /* start exit timer as immediate child exited */
-         printf("exit of main proc\n");
+         DBPRINT("exit of main proc %d\n", pid);
+         return 0;
       }
-      printf("exit %ld\n",(long)pid);
+      DBPRINT("exit %ld\n",(long)pid);
    }
+   DBPRINT("final exit\n");
    return 0;
 }
 
@@ -532,9 +573,9 @@ static int exectarget (void *args)
 {
    arguments *a = (arguments *)args;
 
-printf("exectarget %s\n", a->program);
+   DBPRINT("exectarget %s\n", a->program);
    execvp(a->program, a->progargs);
-   printf("Error execing primary executable\n");
+   fprintf(stderr, "Error execing primary executable\n");
    exit(1);
 }
 
@@ -580,7 +621,7 @@ int parseandmount(char *m)
    if (stat != 0)
    {
       perror("mount");
-printf("source %s, dest %s, flags %ld\n",source, dest, mntflags);
+      DBPRINT("source %s, dest %s, flags %ld\n",source, dest, mntflags);
       fprintf(stderr,"argument: %s\n", m);
       exit(1);
    }
