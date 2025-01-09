@@ -16,7 +16,7 @@
 /* nsmnt: run a program in a new namespace, mounting directories */
 void usage()
 {
-   fprintf(stderr,"usage: nsmnt [-f file] [-m src=dest[=options[=data[=type]]]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]\n");
+   fprintf(stderr,"usage: nsmnt [-f file] [-m src|dest[|options[|data[|type]]]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]\n");
    fprintf(stderr,"-f: file of -m arguments, one per line\n");
    fprintf(stderr,"-m: mount src outside namespace to dest inside namespace\n");
    fprintf(stderr,"-t: set the time offset in the namespace\n");
@@ -99,12 +99,17 @@ void DBPRINT(char * format, ...)
  /* find a equal character, make sure it isn't escaped */
 char * find_equal_unquote(char *s)
 {
+   return strchr(s, '|');
+}
+
+#ifdef OLDWAY
+char * find_equal_unquote(char *s)
+{
    int inq = 0; /* if 0, not in quote */
    int pos = 0;
 
    while (s[pos] != '\0')
    {
-printf("%d %c\n",pos,s[pos]);
       if (s[pos] == '=')
       {
          if (pos > 0)
@@ -123,6 +128,7 @@ printf("%d %c\n",pos,s[pos]);
    }
    return NULL; /* not found in string */
 }
+#endif /*OLDWAY*/
 
 typedef struct
 {
@@ -241,6 +247,8 @@ unsigned long build_options(char *opt)
    unsigned long mask;
    unsigned long allmask = 0;
    
+   DBPRINT("opts: %s\n", opt);
+   if (opt == NULL) return 0;
    optcopy = malloc(strlen(opt) + 1);
    strcpy(optcopy, opt);
    pt = strtok (optcopy,",");
@@ -618,6 +626,11 @@ int parseandmount(char *m)
    /*get source directory */
    source = arg;
    colpos = find_equal_unquote(arg);
+   if (colpos == NULL)
+   {
+      fprintf(stderr,"Must have a source and dest for mount: %s\n",m);
+      exit(1);
+   }
    *colpos = '\0';  /* null terminate source */
    /*get destination directory */
    dest = colpos + 1;
@@ -647,13 +660,13 @@ int parseandmount(char *m)
       }
       mntflags = build_options(opts);
    }
-   mntflags |= MS_BIND|MS_REC;
+   /*mntflags |= MS_BIND|MS_REC;*/
    DBPRINT("mount: source %s, dest %s, flags %ld, data %s, fstype %s\n",source, dest, mntflags, data, fstype);
    stat  = mount(source, dest, fstype, mntflags, data);  
    if (stat != 0)
    {
       perror("mount");
-      fprintf(stderr,"argument: %s\n", m);
+      fprintf(stderr,"errno %d argument: %s\n", errno, m);
       exit(1);
    }
    free(arg);
