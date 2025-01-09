@@ -92,10 +92,11 @@ void DBPRINT(char * format, ...)
        vsprintf(buffer, format, args);
        printf("%s", buffer);
        va_end(args);
+       fflush(stdout);
     }
 }
 
- /* find a equal character, make sure it isn't in a quoted string */
+ /* find a equal character, make sure it isn't escaped */
 char * find_equal_unquote(char *s)
 {
    int inq = 0; /* if 0, not in quote */
@@ -103,11 +104,21 @@ char * find_equal_unquote(char *s)
 
    while (s[pos] != '\0')
    {
-      if (s[pos] == '\'' || s[pos] == '\"')
-         inq ^= s[pos];
+printf("%d %c\n",pos,s[pos]);
       if (s[pos] == '=')
-         if (inq ==  0)
+      {
+         if (pos > 0)
+         {
+            if (s[pos - 1] != '\\')
+            {
+               return &(s[pos]);
+            }
+         }
+         else
+         {
             return &(s[pos]);
+         }
+      }
       pos++;
    }
    return NULL; /* not found in string */
@@ -615,27 +626,33 @@ int parseandmount(char *m)
    if (colpos != NULL) 
    {
       *colpos = '\0';  /* null terminate dest */
-      opts = colpos+1; /* options should be already null terminated */
+      opts = colpos+1; 
+      if (strlen(opts) == 0)
+         opts = NULL;
       colpos = find_equal_unquote(opts);
       if (colpos != NULL) 
       {
          *colpos = '\0';  /* null terminate opts */
          data = colpos + 1;
-         colpos = find_equal_unquote(opts);
+         if (strlen(data) == 0)
+            data = NULL;
+         colpos = find_equal_unquote(data);
          if (colpos != NULL) 
          {
             *colpos = '\0';  /* null terminate opts */
             fstype = colpos + 1;
+            if (strlen(fstype) == 0)
+               fstype = NULL;
          }
       }
       mntflags = build_options(opts);
    }
    mntflags |= MS_BIND|MS_REC;
+   DBPRINT("mount: source %s, dest %s, flags %ld, data %s, fstype %s\n",source, dest, mntflags, data, fstype);
    stat  = mount(source, dest, fstype, mntflags, data);  
    if (stat != 0)
    {
       perror("mount");
-      DBPRINT("source %s, dest %s, flags %ld\n",source, dest, mntflags);
       fprintf(stderr,"argument: %s\n", m);
       exit(1);
    }
