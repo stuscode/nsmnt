@@ -16,7 +16,7 @@
 /* nsmnt: run a program in a new namespace, mounting directories */
 void usage()
 {
-   fprintf(stderr,"usage: nsmnt [-f file] [-m src=dest[=options]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]\n");
+   fprintf(stderr,"usage: nsmnt [-f file] [-m src=dest[=options[=data[=type]]]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]\n");
    fprintf(stderr,"-f: file of -m arguments, one per line\n");
    fprintf(stderr,"-m: mount src outside namespace to dest inside namespace\n");
    fprintf(stderr,"-t: set the time offset in the namespace\n");
@@ -584,6 +584,8 @@ static int exectarget (void *args)
 int parseandmount(char *m)
 {
    char *opts = NULL;
+   char *data = NULL;
+   char *fstype = NULL;
    char *destarg;
    char *arg, *source, *dest;
    unsigned long mntflags = 0;
@@ -614,10 +616,22 @@ int parseandmount(char *m)
    {
       *colpos = '\0';  /* null terminate dest */
       opts = colpos+1; /* options should be already null terminated */
+      colpos = find_equal_unquote(opts);
+      if (colpos != NULL) 
+      {
+         *colpos = '\0';  /* null terminate opts */
+         data = colpos + 1;
+         colpos = find_equal_unquote(opts);
+         if (colpos != NULL) 
+         {
+            *colpos = '\0';  /* null terminate opts */
+            fstype = colpos + 1;
+         }
+      }
       mntflags = build_options(opts);
    }
    mntflags |= MS_BIND|MS_REC;
-   stat  = mount(source, dest, NULL, mntflags, NULL);  
+   stat  = mount(source, dest, fstype, mntflags, data);  
    if (stat != 0)
    {
       perror("mount");
