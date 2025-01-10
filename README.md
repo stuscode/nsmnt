@@ -1,7 +1,7 @@
 nsmnt: namespace mount.  Very lightweight container that puts a process (and its children) in a new namespace with custom mounts.  For Linux.
 
 <pre>
-USAGE: nsmnt [-f file] [-m src=dest[=optionsi[=data[=type]]]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]
+USAGE: nsmnt [-f file] [-m src|dest[|optionsi[|data[|type]]]] [-t [+|-][yyyy[MM[dd[hh[mm[ss]]]]]]] [-h hostname] program [args]
 -f: file of -m arguments, one per line
 -m: mount src outside namespace to dest inside namespace
 -t: set the time offset in the namespace
@@ -11,7 +11,7 @@ if + or - is specified, it is relative to current time
 </pre>
 
 Mount is a little complicated.  Options are option flags specified in mount(2).
-data is a string that is passed to the filesystem.  These are other options.  If this string needs an '=', then it has to be escaped by putting a '\' in front of it.  If no string is desired, such as not having an fstype, then the '=' for the next section will follow immediately after the '=' for the current section.
+data is a string that is passed to the filesystem.  These are other options.    If no string is desired, but there is following section, such as not having fstype, then the '|' for the next section will follow immediately after the '|' for the current section. 
 
 
 NOTES:
