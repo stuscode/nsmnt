@@ -187,11 +187,6 @@ void addmap(char ***a, char *mapstring)
       *a = realloc(*a, sizeof(char *) * (mapnum + 2));
       alist = *a;
    }
-#ifdef OLD
-   newstring = malloc(strlen(mapstring) + 1);
-   strcpy(newstring, mapstring);
-   alist[mapnum] = newstring;
-#endif /*OLD*/
    alist[mapnum] = mapstring; /*save link to program arg */
    alist[mapnum + 1] = NULL;
 }
@@ -365,10 +360,6 @@ arguments *process_args(int argc, char *argv[])
    args->toff = 0.0;
    args->maps = malloc(sizeof(void *)); /*always a list*/
    *(args->maps) = NULL;
-#ifdef NOT
-   args->progargs = malloc(sizeof(void *)); /*always a list*/
-   *(args->progargs) = NULL;
-#endif /*NOT*/
    while (argn <  argc)
    {
       if (argv[argn][0] == '-')
@@ -402,18 +393,6 @@ arguments *process_args(int argc, char *argv[])
       else /* process program and arguments */
       {
          args->program = argv[argn];
-#ifdef NOT
-         addmap(&(args->progargs), argv[argn]); /* program is first arg */
-         argn++;
-
-         while (argn < argc)
-         {
-            addmap(&(args->progargs), argv[argn]);
-            argn++;
-         }
-         addmap(&(args->progargs), NULL);
-         break; /* this else handled all the rest of the arguments */
-#endif /*NOT*/
          args->progargs=&(argv[argn]);
          argn = argc;
       }
@@ -576,7 +555,7 @@ int pidone(void *a)
    {
       if (pid == primary_pid)
       {
-         /* TODO: MAKE THIS EXIT THE PROCESS */
+         /* TODO: DOES ANYTHING ELSE NEED TO BE DONE TO TEAR IT ALL DOWN? */
          /* start exit timer as immediate child exited */
          DBPRINT("exit of main proc %d\n", pid);
          return 0;
@@ -598,7 +577,7 @@ static int exectarget (void *args)
    exit(1);
 }
 
-/* format: /source/path=/dest/path[:options]? */
+/* format: /source/path|/dest/path|options|data|fstype */
 /* options are comma separated */
 int parseandmount(char *m)
 {
@@ -660,7 +639,6 @@ int parseandmount(char *m)
       }
       mntflags = build_options(opts);
    }
-   /*mntflags |= MS_BIND|MS_REC;*/
    DBPRINT("mount: source %s, dest %s, flags %ld, data %s, fstype %s\n",source, dest, mntflags, data, fstype);
    stat  = mount(source, dest, fstype, mntflags, data);  
    if (stat != 0)
